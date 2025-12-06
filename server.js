@@ -1,17 +1,20 @@
 const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
-
+import pkg from "pg";
+const { Pool } = pkg;
 const app = express();
 app.use(cors());
 app.use(express.json());
+require ('dotenv').config();
 
-const pool = new Pool({
-  user: "admin_amigo",
-  host: "localhost",
-  database: "amigo_secreto",
-  password: "12345",
-  port: 5432,
+export const pool = new Pool({
+  host: process.env.PGHOST,
+  user: process.env.PGUSER,
+  password: process.env.PGPASSWORD,
+  database: process.env.PGDATABASE,
+  port: process.env.PGPORT,
+  ssl: { rejectUnauthorized: false }
 });
 
 // ✅ GENERAR SORTEO
