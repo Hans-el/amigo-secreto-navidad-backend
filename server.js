@@ -45,7 +45,7 @@ app.post("/sorteo", async (req, res) => {
    ✅ ENDPOINT: PARTICIPAR EN EL SORTEO
 ============================================ */
 app.post("/participar", async (req, res) => {
-  const { nombre } = req.body;
+  const { nombre, intereses} = req.body;
 
   try {
     // 1. Buscar participante
@@ -96,12 +96,12 @@ app.post("/participar", async (req, res) => {
       "UPDATE participantes SET participo = TRUE WHERE id IN ($1, $2)",
       [participante.id, amigo.id]
     );
-
- // ✅ RESPUESTA CON INTERESES DEL AMIGO
+// ✅ RESPUESTA CON INTERESES DEL AMIGO
     res.json({
       amigo: amigo.nombre,
       intereses: amigo.intereses || "Sin intereses registrados"
     });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error servidor" });
