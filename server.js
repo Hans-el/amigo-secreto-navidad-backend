@@ -1,100 +1,123 @@
-const express = require("express");
-const cors = require("cors");
-const { Pool } = require("pg");
+import express from "express";
 import pkg from "pg";
+import cors from "cors";
+import dotenv from "dotenv";
+import bcrypt from "bcryptjs";
+
+dotenv.config();
+
 const { Pool } = pkg;
 const app = express();
+
 app.use(cors());
 app.use(express.json());
-require ('dotenv').config();
 
-export const pool = new Pool({
+// ✅ CONEXIÓN SEGURA A RAILWAY
+const pool = new Pool({
   host: process.env.PGHOST,
   user: process.env.PGUSER,
-  connectionString: process.env.DATABASE_URL,
   password: process.env.PGPASSWORD,
   database: process.env.PGDATABASE,
   port: process.env.PGPORT,
   ssl: { rejectUnauthorized: false }
 });
 
-// ✅ GENERAR SORTEO
-app.post("/api/sorteo", async (req, res) => {
+const PORT = process.env.PORT || 3000;
+
+/* ============================================
+   ✅ ENDPOINT: PARTICIPAR EN EL SORTEO
+============================================ */
+app.post("/participar", async (req, res) => {
+  const { nombre } = req.body;
+
   try {
-    const { rows } = await pool.query("SELECT * FROM participantes");
-    const mezclados = [...rows].sort(() => Math.random() - 0.5);
-
-    for (let i = 0; i < mezclados.length; i++) {
-      const participante = mezclados[i];
-      const amigo = mezclados[(i + 1) % mezclados.length];
-
-      await pool.query(
-        "INSERT INTO asignaciones (participante_id, amigo_id) VALUES ($1, $2)",
-        [participante.id, amigo.id]
-      );
-    }
-
-    res.json({ mensaje: "Sorteo generado correctamente" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ✅ OBTENER AMIGO SECRETO
-app.get("/api/amigo/:nombre", async (req, res) => {
-  try {
-    const nombre = req.params.nombre;
-
-    const p = await pool.query(
-      "SELECT id FROM participantes WHERE LOWER(nombre) = LOWER($1)",
+    // 1. Buscar participante
+    const participanteRes = await pool.query(
+      "SELECT * FROM participantes WHERE LOWER(nombre) = LOWER($1)",
       [nombre]
     );
 
-    if (p.rows.length === 0) {
-      return res.json({ error: "Participante no existe" });
+    if (participanteRes.rows.length === 0) {
+      return res.status(400).json({ error: "Participante no válido" });
     }
 
-    const participanteId = p.rows[0].id;
+    const participante = participanteRes.rows[0];
 
-    const usado = await pool.query(
-      "SELECT 1 FROM usados WHERE participante_id = $1",
-      [participanteId]
-    );
-
-    if (usado.rows.length > 0) {
-      return res.json({ error: "Este participante ya usó su turno" });
+    // 2. Verificar si ya participó
+    if (participante.participo) {
+      return res.status(400).json({ error: "Ya participaste" });
     }
 
-    const amigo = await pool.query(`
-      SELECT p.nombre FROM asignaciones a
-      JOIN participantes p ON p.id = a.amigo_id
-      WHERE a.participante_id = $1
-    `, [participanteId]);
+    // 3. Obtener amigos disponibles
+    const disponiblesRes = await pool.query(`
+      SELECT * FROM participantes
+      WHERE participo = FALSE AND id != $1
+    `, [participante.id]);
 
+    if (disponiblesRes.rows.length === 0) {
+      return res.status(400).json({ error: "No quedan participantes disponibles" });
+    }
+
+    const amigo = disponiblesRes.rows[
+      Math.floor(Math.random() * disponiblesRes.rows.length)
+    ];
+
+    // 4. Guardar asignación
     await pool.query(
-      "INSERT INTO usados (participante_id) VALUES ($1)",
-      [participanteId]
+      "INSERT INTO asignaciones (participante_id, amigo_id) VALUES ($1, $2)",
+      [participante.id, amigo.id]
     );
 
-    res.json({ amigo: amigo.rows[0].nombre });
+    // 5. Marcar ambos como usados
+    await pool.query(
+      "UPDATE participantes SET participo = TRUE WHERE id IN ($1, $2)",
+      [participante.id, amigo.id]
+    );
+
+    res.json({ amigo: amigo.nombre });
 
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error(error);
+    res.status(500).json({ error: "Error servidor" });
   }
 });
 
-// ✅ RESET ADMIN
-app.post("/api/reset", async (req, res) => {
+/* ============================================
+   ✅ ENDPOINT: LOGIN ADMIN
+============================================ */
+app.post("/admin-login", async (req, res) => {
+  const { clave } = req.body;
+
+  if (clave === process.env.ADMIN_SECRET) {
+    res.json({ ok: true });
+  } else {
+    res.status(401).json({ ok: false });
+  }
+});
+
+/* ============================================
+   ✅ ENDPOINT: RESET GENERAL (SOLO ADMIN)
+============================================ */
+app.post("/reset", async (req, res) => {
+  const { clave } = req.body;
+
+  if (clave !== process.env.ADMIN_SECRET) {
+    return res.status(401).json({ error: "No autorizado" });
+  }
+
   try {
-    await pool.query("DELETE FROM usados");
     await pool.query("DELETE FROM asignaciones");
-    res.json({ mensaje: "Sorteo reseteado" });
+    await pool.query("UPDATE participantes SET participo = FALSE");
+
+    res.json({ ok: true, reset: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Error al resetear" });
   }
 });
 
-app.listen(3000, () => {
-  console.log("✅ Servidor API activo en http://localhost:3000");
+/* ============================================
+   ✅ SERVIDOR ONLINE
+============================================ */
+app.listen(PORT, () => {
+  console.log("Servidor corriendo en puerto", PORT);
 });
-
