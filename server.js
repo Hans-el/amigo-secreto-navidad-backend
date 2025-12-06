@@ -43,7 +43,6 @@ app.post("/sorteo", async (req, res) => {
    ✅ ENDPOINT: PARTICIPAR EN EL SORTEO
    - Genera token único para cada participante
 ============================================ */
-import crypto from "crypto"; // Asegúrate de importar crypto si no lo has hecho
 
 app.post("/participar", async (req, res) => {
   const { nombre, intereses } = req.body;
