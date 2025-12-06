@@ -65,7 +65,13 @@ app.post("/participar", async (req, res) => {
       return res.status(400).json({ error: "Ya participaste" });
     }
 
-    // 3. Obtener amigos disponibles
+     // 3. Guardar intereses del participante
+    await pool.query(
+      "UPDATE participantes SET intereses = $1 WHERE id = $2",
+      [intereses, participante.id]
+    );
+
+    // 4. Obtener amigos disponibles
     const disponiblesRes = await pool.query(`
       SELECT * FROM participantes
       WHERE participo = FALSE AND id != $1
@@ -79,20 +85,23 @@ app.post("/participar", async (req, res) => {
       Math.floor(Math.random() * disponiblesRes.rows.length)
     ];
 
-    // 4. Guardar asignación
+    // 5. Guardar asignación
     await pool.query(
       "INSERT INTO asignaciones (participante_id, amigo_id) VALUES ($1, $2)",
       [participante.id, amigo.id]
     );
 
-    // 5. Marcar ambos como usados
+    // 6. Marcar ambos como usados
     await pool.query(
       "UPDATE participantes SET participo = TRUE WHERE id IN ($1, $2)",
       [participante.id, amigo.id]
     );
 
-    res.json({ amigo: amigo.nombre });
-
+ // ✅ RESPUESTA CON INTERESES DEL AMIGO
+    res.json({
+      amigo: amigo.nombre,
+      intereses: amigo.intereses || "Sin intereses registrados"
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error servidor" });
