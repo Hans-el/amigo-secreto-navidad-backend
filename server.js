@@ -45,7 +45,7 @@ app.post("/sorteo", async (req, res) => {
    ✅ ENDPOINT: PARTICIPAR EN EL SORTEO
 ============================================ */
 app.post("/participar", async (req, res) => {
-  const { nombre, intereses} = req.body;
+  const { nombre, intereses } = req.body;
 
   try {
     // 1. Buscar participante
@@ -65,7 +65,7 @@ app.post("/participar", async (req, res) => {
       return res.status(400).json({ error: "Ya participaste" });
     }
 
-     // 3. Guardar intereses del participante
+    // 3. Guardar intereses del participante
     await pool.query(
       "UPDATE participantes SET intereses = $1 WHERE id = $2",
       [intereses, participante.id]
@@ -91,12 +91,13 @@ app.post("/participar", async (req, res) => {
       [participante.id, amigo.id]
     );
 
-    // 6. Marcar ambos como usados
+    // 6. Marcar SOLO al que consultó como participó ✅
     await pool.query(
-      "UPDATE participantes SET participo = TRUE WHERE id IN ($1, $2)",
-      [participante.id, amigo.id]
+      "UPDATE participantes SET participo = TRUE WHERE id = $1",
+      [participante.id]
     );
-// ✅ RESPUESTA CON INTERESES DEL AMIGO
+
+    // ✅ RESPUESTA CON INTERESES DEL AMIGO
     res.json({
       amigo: amigo.nombre,
       intereses: amigo.intereses || "Sin intereses registrados"
