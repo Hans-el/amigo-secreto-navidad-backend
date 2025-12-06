@@ -2,7 +2,6 @@ import express from "express";
 import pkg from "pg";
 import cors from "cors";
 import dotenv from "dotenv";
-import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
 dotenv.config();
@@ -26,6 +25,7 @@ const pool = new Pool({
 
 const PORT = process.env.PORT || 3000;
 
+
 /* ============================================
    ✅ ENDPOINT: INICIAR SORTEO
 ============================================ */
@@ -43,11 +43,13 @@ app.post("/sorteo", async (req, res) => {
    ✅ ENDPOINT: PARTICIPAR EN EL SORTEO
    - Genera token único para cada participante
 ============================================ */
+import crypto from "crypto"; // Asegúrate de importar crypto si no lo has hecho
+
 app.post("/participar", async (req, res) => {
   const { nombre, intereses } = req.body;
 
   try {
-    // Buscar participante
+    // 1. Buscar participante que quiere participar
     const participanteRes = await pool.query(
       "SELECT * FROM participantes WHERE LOWER(nombre) = LOWER($1)",
       [nombre]
@@ -59,45 +61,69 @@ app.post("/participar", async (req, res) => {
 
     const participante = participanteRes.rows[0];
 
-    // Verificar si ya participó
+    // 2. Verificar si ya participó
     if (participante.participo) {
       return res.status(400).json({ error: "Ya participaste" });
     }
 
-    // Guardar intereses del participante
+    // 3. Guardar intereses del participante
     await pool.query(
       "UPDATE participantes SET intereses = $1 WHERE id = $2",
       [intereses, participante.id]
     );
 
-    // Obtener amigos disponibles
-    const disponiblesRes = await pool.query(
-      `SELECT * FROM participantes WHERE participo = FALSE AND id != $1`,
+    // 4. Obtener todos los participantes
+    const allRes = await pool.query("SELECT * FROM participantes");
+    const participantes = allRes.rows;
+
+    // 5. Shuffle (barajar) los participantes
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    const shuffled = shuffle([...participantes]);
+
+    // 6. Crear asignaciones si aún no existen
+    for (let i = 0; i < shuffled.length; i++) {
+      const p = shuffled[i];
+      const amigo = shuffled[(i + 1) % shuffled.length];
+
+      // Verificar si ya tiene asignación para no duplicar
+      const existing = await pool.query(
+        "SELECT * FROM asignaciones WHERE participante_id = $1",
+        [p.id]
+      );
+      if (existing.rows.length === 0) {
+        await pool.query(
+          "INSERT INTO asignaciones (participante_id, amigo_id) VALUES ($1, $2)",
+          [p.id, amigo.id]
+        );
+      }
+    }
+
+    // 7. Obtener el amigo asignado del participante que hizo la petición
+    const amigoRes = await pool.query(
+      `SELECT p.nombre, p.intereses 
+       FROM asignaciones a
+       JOIN participantes p ON a.amigo_id = p.id
+       WHERE a.participante_id = $1`,
       [participante.id]
     );
 
-    if (disponiblesRes.rows.length === 0) {
-      return res.status(400).json({ error: "No quedan participantes disponibles" });
-    }
+    const amigo = amigoRes.rows[0];
 
-    const amigo = disponiblesRes.rows[
-      Math.floor(Math.random() * disponiblesRes.rows.length)
-    ];
-
-    // Guardar asignación
-    await pool.query(
-      "INSERT INTO asignaciones (participante_id, amigo_id) VALUES ($1, $2)",
-      [participante.id, amigo.id]
-    );
-
-    // Marcar participante como participó y generar token
+    // 8. Generar token y marcar participante como participó
     const token = crypto.randomBytes(16).toString("hex");
     await pool.query(
       "UPDATE participantes SET participo = TRUE, token = $1 WHERE id = $2",
       [token, participante.id]
     );
 
-    // Responder con amigo y token
+    // 9. Responder con amigo y token
     res.json({
       amigo: amigo.nombre,
       intereses: amigo.intereses || "Sin intereses registrados",
