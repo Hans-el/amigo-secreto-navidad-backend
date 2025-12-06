@@ -5,7 +5,10 @@ import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 
 
+
 dotenv.config();
+console.log("DB HOST:", process.env.PGHOST);
+
 
 const { Pool } = pkg;
 const app = express();
@@ -24,6 +27,19 @@ const pool = new Pool({
 });
 
 const PORT = process.env.PORT || 3000;
+/* ============================================
+   ✅ ENDPOINT: INICIAR SORTEO (SOLO VERIFICA CONEXIÓN)
+============================================ */
+app.post("/sorteo", async (req, res) => {
+  try {
+    const test = await pool.query("SELECT 1");
+    res.json({ ok: true, mensaje: "Sorteo iniciado correctamente" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ ok: false, error: "Error al iniciar sorteo" });
+  }
+});
+
 
 /* ============================================
    ✅ ENDPOINT: PARTICIPAR EN EL SORTEO
@@ -99,22 +115,26 @@ app.post("/admin-login", async (req, res) => {
 /* ============================================
    ✅ ENDPOINT: RESET GENERAL (SOLO ADMIN)
 ============================================ */
-app.post("/reset", async (req, res) => {
-  const { clave } = req.body;
-
-  if (clave !== process.env.ADMIN_SECRET) {
-    return res.status(401).json({ error: "No autorizado" });
-  }
+async function resetearTodo() {
+  if (!confirm("¿Seguro que deseas borrar el sorteo?")) return;
 
   try {
-    await pool.query("DELETE FROM asignaciones");
-    await pool.query("UPDATE participantes SET participo = FALSE");
+    const res = await fetch(`${API_URL}/reset`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clave: CLAVE_ADMIN })
+    });
 
-    res.json({ ok: true, reset: true });
+    const data = await res.json();
+    alert("Sorteo reseteado correctamente");
+    localStorage.removeItem("bloqueado");
+    pantalla("pantallaInicio");
+
   } catch (error) {
-    res.status(500).json({ error: "Error al resetear" });
+    alert("No se pudo resetear el sorteo");
   }
-});
+}
+
 
 /* ============================================
    ✅ SERVIDOR ONLINE
