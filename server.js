@@ -115,25 +115,24 @@ app.post("/admin-login", async (req, res) => {
 /* ============================================
    ✅ ENDPOINT: RESET GENERAL (SOLO ADMIN)
 ============================================ */
-async function resetearTodo() {
-  if (!confirm("¿Seguro que deseas borrar el sorteo?")) return;
+app.post("/reset", async (req, res) => {
+  const { clave } = req.body;
+
+  if (clave !== process.env.ADMIN_SECRET) {
+    return res.status(401).json({ error: "No autorizado" });
+  }
 
   try {
-    const res = await fetch(`${API_URL}/reset`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clave: CLAVE_ADMIN })
-    });
+    await pool.query("DELETE FROM asignaciones");
+    await pool.query("UPDATE participantes SET participo = FALSE");
 
-    const data = await res.json();
-    alert("Sorteo reseteado correctamente");
-    localStorage.removeItem("bloqueado");
-    pantalla("pantallaInicio");
-
+    res.json({ ok: true, mensaje: "Sorteo reseteado correctamente" });
   } catch (error) {
-    alert("No se pudo resetear el sorteo");
+    console.error(error);
+    res.status(500).json({ error: "Error al resetear sorteo" });
   }
-}
+});
+
 
 
 /* ============================================
