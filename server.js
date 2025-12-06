@@ -122,6 +122,44 @@ app.post("/admin-login", async (req, res) => {
 });
 
 /* ============================================
+   ✅ ENDPOINT: VER HISTORIAL PERSONAL
+============================================ */
+app.post("/historial", async (req, res) => {
+  const { nombre } = req.body;
+
+  try {
+    const participanteRes = await pool.query(
+      "SELECT * FROM participantes WHERE LOWER(nombre) = LOWER($1)",
+      [nombre]
+    );
+
+    if (participanteRes.rows.length === 0) {
+      return res.status(404).json({ error: "Participante no encontrado" });
+    }
+
+    const participante = participanteRes.rows[0];
+
+    const historialRes = await pool.query(`
+      SELECT p.nombre AS amigo, p.intereses
+      FROM asignaciones a
+      JOIN participantes p ON a.amigo_id = p.id
+      WHERE a.participante_id = $1
+    `, [participante.id]);
+
+    if (historialRes.rows.length === 0) {
+      return res.status(400).json({ error: "Aún no tienes amigo asignado" });
+    }
+
+    res.json(historialRes.rows[0]);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al consultar historial" });
+  }
+});
+
+
+/* ============================================
    ✅ ENDPOINT: RESET GENERAL (SOLO ADMIN)
 ============================================ */
 app.post("/reset", async (req, res) => {
