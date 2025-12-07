@@ -62,7 +62,7 @@ app.post("/participar", async (req, res) => {
 
     // 2. Verificar si ya participó
     if (participante.participo) {
-      return res.status(400).json({ Ups: "¡Ya participaste!. Revisa tu historial" });
+      return res.status(400).json({ error: "¡Ya participaste!. Revisa tu historial" });
     }
 
     // 3. Guardar intereses del participante
